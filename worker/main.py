@@ -1,17 +1,11 @@
 # worker/main.py
 import time
-import sys
-import os
 import logging
 import uuid
 
-# Asegurar que el directorio raíz del proyecto esté en el PYTHONPATH
-# para poder importar módulos de la carpeta 'app' sin problemas
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from app.database import SessionLocal  # noqa: E402
-from app.models import Task  # noqa: E402
-from app.redis_client import redis_client  # noqa: E402
+from app.database import SessionLocal
+from app.models import Task
+from app.redis_client import redis_client
 
 # Configuración básica de logs
 logging.basicConfig(

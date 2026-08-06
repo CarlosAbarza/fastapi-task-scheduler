@@ -1,36 +1,53 @@
 # deployments/Dockerfile
-# 1. Usar una imagen base oficial de Python liviana (slim)
-FROM python:3.11-slim
 
-# 2. Configurar variables de entorno críticas de Python para contenedores
-# Evita que Python escriba archivos .pyc (caché) en el contenedor
-ENV PYTHONDONTWRITEBYTECODE=1
-# Evita que Python guarde en buffer los logs; se imprimen directo en la consola en tiempo real
-ENV PYTHONUNBUFFERED=1
+# ================= Stage 1: Build stage =================
+FROM python:3.11-slim AS builder
 
-# 3. Establecer el directorio de trabajo dentro del contenedor
-WORKDIR /code
+WORKDIR /build
 
-# 4. Instalar las dependencias del sistema necesarias
-# gcc y python3-dev a veces son requeridos para compilar ciertas librerías de Python
+# Instalar dependencias del sistema requeridas para compilar librerías de Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 5. Copiar requirements.txt e instalar dependencias de Python
-# Hacemos esto ANTES de copiar el resto del código para aprovechar la caché de Docker
-COPY requirements.txt /code/
+# Crear y activar un entorno virtual
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+
+# Instalar dependencias en el virtualenv
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# 6. Copiar el código del proyecto al directorio de trabajo del contenedor
-COPY ./app /code/app
-COPY ./worker /code/worker
+# ================= Stage 2: Runner stage =================
+FROM python:3.11-slim AS runner
 
-# 7. Exponer el puerto por defecto de la API
+# Configurar variables de entorno críticas
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/code
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /code
+
+# Copiar el entorno virtual con todas las dependencias instaladas
+COPY --from=builder /opt/venv /opt/venv
+
+# Crear un usuario de sistema sin privilegios y su grupo de seguridad
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -m -s /bin/bash appuser
+
+# Copiar el código del proyecto y asignar la propiedad al usuario no privilegiado
+COPY --chown=appuser:appgroup ./app /code/app
+COPY --chown=appuser:appgroup ./worker /code/worker
+
+# Cambiar el usuario de ejecución al no privilegiado
+USER appuser
+
 EXPOSE 8000
 
-# 8. Comando por defecto (en este caso levantará la API de FastAPI)
+# Comando por defecto para iniciar la API
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

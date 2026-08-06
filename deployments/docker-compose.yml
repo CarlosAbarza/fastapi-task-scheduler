@@ -54,7 +54,7 @@ services:
       dockerfile: deployments/Dockerfile
     container_name: python_worker
     # Anulamos el comando por defecto del Dockerfile para que ejecute el worker
-    command: python worker/main.py
+    command: python -m worker.main
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/task_db
       - REDIS_URL=redis://redis:6379/0
