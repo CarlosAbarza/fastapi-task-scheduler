@@ -1,0 +1,95 @@
+# deployments/docker-compose.yml
+services:
+  # 1. Base de datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: task_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Cola de mensajería Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. FastAPI Web API
+  api:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    container_name: fastapi_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/task_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. Proceso Worker de segundo plano
+  worker:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    container_name: python_worker
+    # Anulamos el comando por defecto del Dockerfile para que ejecute el worker
+    command: python worker/main.py
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/task_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 5. Servidor de Monitoreo Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus_mon
+    volumes:
+      - ../config/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  # 6. Visualización de Métricas Grafana
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: grafana_viz
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ../config/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+# Volúmenes para persistir los datos
+volumes:
+  pgdata:
+  grafanadata:
