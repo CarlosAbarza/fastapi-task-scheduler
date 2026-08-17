@@ -2,6 +2,7 @@
 import time
 import logging
 import uuid
+import socket
 
 from app.database import SessionLocal
 from app.models import Task
@@ -13,7 +14,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler()],
 )
-logger = logging.getLogger("worker")
+worker_id = socket.gethostname()[:8]
+logger = logging.getLogger(f"worker-{worker_id}")
 
 
 def process_task(task_id: uuid.UUID):
