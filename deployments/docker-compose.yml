@@ -52,7 +52,7 @@ services:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
-    container_name: python_worker
+    # container_name: python_worker  # Omite el nombre fijo para permitir scaling (réplicas)
     # Anulamos el comando por defecto del Dockerfile para que ejecute el worker
     command: python -m worker.main
     environment:
